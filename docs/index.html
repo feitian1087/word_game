@@ -18,10 +18,11 @@ const BG = "#161a38";
 const BUBBLE = ["#ef5350", "#ffa726", "#ffee58", "#66bb6a", "#42a5f5", "#ab47bc"];
 const LEVELS = [
   [0, "ASDFJKL", [50, 70], 2400, 3],
-  [10, "ASDFGHJKL", [60, 85], 2100, 4],
-  [25, "ASDFGHJKLQWERTYUIOP", [70, 100], 1800, 4],
-  [45, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", [80, 115], 1500, 5],
-  [70, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", [100, 140], 1200, 6],
+  [100, "ASDFGHJKL", [60, 85], 2100, 4],
+  [300, "ASDFGHJKLQWERTYUIOP", [70, 100], 1800, 4],
+  [600, "abcdefghijklmnopqrstuvwxyz", [80, 115], 1500, 5],
+  [1000, "abcdefghijklmnopqrstuvwxyz", [100, 140], 1200, 6],
+  [1500, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", [110, 150], 1100, 6],
 ];
 const OK_SOUND = [[523, 523, 0.08], [784, 784, 0.12]];
 const ERR_SOUND = [[220, 140, 0.25]];
@@ -163,7 +164,7 @@ window.addEventListener("keydown", e => {
     if (e.key === " " || e.key === "Enter") { e.preventDefault(); newGame(performance.now()); }
     return;
   }
-  if (/^[a-zA-Z]$/.test(e.key)) press(e.key.toUpperCase(), performance.now());
+  if (/^[a-zA-Z]$/.test(e.key)) press(e.key, performance.now());
 });
 
 let last = performance.now();
