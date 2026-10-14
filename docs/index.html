@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>字母雨</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #161a38; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { max-width: 100vw; max-height: 100vh; width: auto; height: auto; aspect-ratio: 4 / 3; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="600"></canvas>
+<script>
+const W = 800, H = 600, R = 30, LIVES = 20, HIT = 10, BANNER = 1500, BEST_KEY = "letter_rain_best";
+const BG = "#161a38";
+const BUBBLE = ["#ef5350", "#ffa726", "#ffee58", "#66bb6a", "#42a5f5", "#ab47bc"];
+const LEVELS = [
+  [0, "ASDFJKL", [50, 70], 2400, 3],
+  [10, "ASDFGHJKL", [60, 85], 2100, 4],
+  [25, "ASDFGHJKLQWERTYUIOP", [70, 100], 1800, 4],
+  [45, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", [80, 115], 1500, 5],
+  [70, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", [100, 140], 1200, 6],
+];
+const OK_SOUND = [[523, 523, 0.08], [784, 784, 0.12]];
+const ERR_SOUND = [[220, 140, 0.25]];
+
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+let best = Number(localStorage.getItem(BEST_KEY)) || 0;
+let audio = null;
+let s;
+
+function beep(segments) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    return;
+  }
+  let t = audio.currentTime;
+  for (const [f0, f1, dur] of segments) {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.linearRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(t);
+    o.stop(t + dur);
+    t += dur;
+  }
+}
+
+function levelFor(score) {
+  let idx = 0;
+  LEVELS.forEach((lv, i) => { if (score >= lv[0]) idx = i; });
+  return idx;
+}
+
+function newGame(now) {
+  s = { drops: [], score: 0, level: 0, lives: LIVES, over: false, last: now, banner: now + BANNER, newBest: false };
+}
+
+function spawn(now) {
+  const [, pool, speed, interval, cap] = LEVELS[s.level];
+  if (s.drops.length >= cap || now - s.last < interval) return;
+  s.last = now;
+  const gap = c => Math.min(W, ...s.drops.map(d => Math.abs(c - d.x)));
+  const cands = Array.from({ length: 8 }, () => R + 10 + Math.random() * (W - 2 * R - 20));
+  const x = cands.reduce((a, c) => (gap(c) > gap(a) ? c : a));
+  const letter = pool[Math.floor(Math.random() * pool.length)];
+  const v = speed[0] + Math.random() * (speed[1] - speed[0]);
+  s.drops.push({ letter, x, y: -R, speed: v, color: BUBBLE[Math.floor(Math.random() * BUBBLE.length)] });
+}
+
+function press(letter, now) {
+  if (s.over) return;
+  const hits = s.drops.filter(d => d.letter === letter);
+  if (!hits.length) { beep(ERR_SOUND); return; }
+  const drop = hits.reduce((a, b) => (b.y > a.y ? b : a));
+  s.drops = s.drops.filter(d => d !== drop);
+  s.score += HIT;
+  beep(OK_SOUND);
+  const level = levelFor(s.score);
+  if (level !== s.level) {
+    s.level = level;
+    s.lives = LIVES;
+    s.banner = now + BANNER;
+  }
+}
+
+function update(dt, now) {
+  if (s.over) return;
+  spawn(now);
+  for (const d of s.drops) d.y += d.speed * dt;
+  const missed = s.drops.filter(d => d.y - R > H);
+  if (missed.length) {
+    s.drops = s.drops.filter(d => !missed.includes(d));
+    s.lives -= missed.length;
+    beep(ERR_SOUND);
+  }
+  if (s.lives <= 0) {
+    s.over = true;
+    if (s.score > best) {
+      best = s.score;
+      s.newBest = true;
+      localStorage.setItem(BEST_KEY, String(best));
+    }
+  }
+}
+
+function draw(now) {
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const d of s.drops) {
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, R, 0, Math.PI * 2);
+    ctx.fillStyle = d.color;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 36px Arial, sans-serif";
+    ctx.fillText(d.letter, d.x, d.y + 2);
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#fff";
+  ctx.font = "24px sans-serif";
+  ctx.fillText(`分数 ${s.score}    最高分 ${best}    关卡 ${s.level + 1}    生命 ${s.lives}/${LIVES}`, 12, 30);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (now < s.banner && !s.over) {
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 96px sans-serif";
+    ctx.fillText(`第 ${s.level + 1} 关`, W / 2, H / 2);
+  }
+  if (s.over) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.66)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 96px sans-serif";
+    ctx.fillText("游戏结束", W / 2, H / 2 - 120);
+    ctx.font = "40px sans-serif";
+    ctx.fillText(`得分：${s.score}    最高分：${best}`, W / 2, H / 2 - 30);
+    if (s.newBest) {
+      ctx.fillStyle = "#ffee58";
+      ctx.fillText("新纪录！", W / 2, H / 2 + 40);
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = "32px sans-serif";
+    ctx.fillText("按空格键或回车键再玩一次", W / 2, H / 2 + 120);
+  }
+}
+
+window.addEventListener("keydown", e => {
+  if (s.over) {
+    if (e.key === " " || e.key === "Enter") { e.preventDefault(); newGame(performance.now()); }
+    return;
+  }
+  if (/^[a-zA-Z]$/.test(e.key)) press(e.key.toUpperCase(), performance.now());
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt, now);
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+newGame(performance.now());
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
